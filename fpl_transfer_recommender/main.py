@@ -5,24 +5,29 @@ This module handles the command-line interface and orchestrates the workflow
 from data fetching to generating recommendations.
 """
 
-import sys
 import argparse
-import logging
 import asyncio
-import pandas as pd
+import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
+from typing import Any, Dict
+
+import pandas as pd
 
 # Import the modules from our package
 from fpl_transfer_recommender.data.api import (
-    get_player_data, get_team_data, get_fixture_data, get_user_team_data
+    get_fixture_data,
+    get_player_data,
+    get_team_data,
+    get_user_team_data,
 )
 from fpl_transfer_recommender.data.preprocessing import get_preprocessed_data
 from fpl_transfer_recommender.models.feature_engineering import generate_full_feature_set
-from fpl_transfer_recommender.models.training import FPLPointsPredictor
 from fpl_transfer_recommender.models.recommendation import TransferRecommender
+from fpl_transfer_recommender.models.training import FPLPointsPredictor
 from fpl_transfer_recommender.utils.config import (
-    DEFAULT_MODEL_FILE, DEFAULT_NUM_TRANSFERS, DEFAULT_EXTRA_BUDGET
+    DEFAULT_EXTRA_BUDGET,
+    DEFAULT_MODEL_FILE,
+    DEFAULT_NUM_TRANSFERS,
 )
 from fpl_transfer_recommender.utils.helpers import setup_logging
 
@@ -91,10 +96,10 @@ async def fetch_data(use_cache: bool = True) -> Dict[str, pd.DataFrame]:
     logger.info("Fetching data from FPL API...")
     
     try:
-        # Fetch player, team, and fixture data asynchronously
-        player_data = await get_player_data(use_cache)
-        team_data = await get_team_data(use_cache)
-        fixture_data = await get_fixture_data(use_cache)
+        # Fetch player, team, and fixture data (functions handle async internally)
+        player_data = get_player_data()
+        team_data = get_team_data()
+        fixture_data = get_fixture_data()
         
         # Check if we got data
         if not player_data or not team_data or not fixture_data:
@@ -126,14 +131,18 @@ async def fetch_user_team(user_id: int, use_cache: bool = True) -> pd.DataFrame:
     logger.info(f"Fetching team data for user ID {user_id}...")
     
     try:
-        user_team = await get_user_team_data(user_id, use_cache)
+        user_team_data = get_user_team_data(user_id)
         
-        if user_team.empty:
+        # Check if the dictionary is empty or doesn't contain team data
+        if not user_team_data or 'team' not in user_team_data or not user_team_data['team']:
             logger.error(f"Failed to fetch team data for user ID {user_id}")
             return pd.DataFrame()
-            
-        logger.info(f"Successfully fetched team with {len(user_team)} players")
-        return user_team
+        
+        # Convert the team list to a DataFrame
+        user_team_df = pd.DataFrame(user_team_data['team'])
+        
+        logger.info(f"Successfully fetched team with {len(user_team_df)} players")
+        return user_team_df
         
     except Exception as e:
         logger.error(f"Error fetching user team: {e}")
@@ -198,7 +207,7 @@ def predict_points(players_with_features: pd.DataFrame, model_path: str, retrain
         # Check if model exists and should be loaded
         if model_file.exists() and not retrain:
             logger.info(f"Loading model from {model_file}")
-            if predictor.load(model_file):
+            if predictor.load(str(model_file)):
                 # Predict points
                 players_with_predictions = players_with_features.copy()
                 players_with_predictions['predicted_points'] = predictor.predict(players_with_features)

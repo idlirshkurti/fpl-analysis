@@ -4,7 +4,6 @@ Configuration settings for FPL Transfer Recommender.
 This module contains constants and configuration variables used throughout the application.
 """
 
-import os
 from pathlib import Path
 
 # Base directories

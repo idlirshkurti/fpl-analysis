@@ -4,27 +4,33 @@ Includes functions for training, evaluating, and saving models.
 """
 
 import logging
+import os
+import pickle
+from os import PathLike
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
+
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import Dict, List, Tuple, Any, Optional, Union, Callable
-from pathlib import Path
-import pickle
-import datetime
-import joblib
-import os
-
-from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, cross_val_score
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
-from sklearn.svm import SVR
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, explained_variance_score
+from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import AdaBoostRegressor, GradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectFromModel, RFE
+from sklearn.linear_model import ElasticNet, Lasso, LinearRegression, Ridge
+from sklearn.metrics import (
+    explained_variance_score,
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+)
+from sklearn.model_selection import (
+    GridSearchCV,
+    RandomizedSearchCV,
+    train_test_split,
+)
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.svm import SVR
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +41,7 @@ DEFAULT_RESULTS_DIR = "results"
 def prepare_data(
     data: pd.DataFrame,
     target_col: str = 'total_points',
-    id_cols: List[str] = None,
+    id_cols: Optional[List[str]] = None,
     test_size: float = 0.2,
     random_state: int = 42
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, List[str]]:
@@ -88,8 +94,8 @@ def prepare_data(
     
     return X_train, X_test, y_train, y_test, feature_cols
 
-def create_preprocessing_pipeline(categorical_features: List[str] = None, 
-                                 numeric_features: List[str] = None) -> ColumnTransformer:
+def create_preprocessing_pipeline(categorical_features: Optional[List[str]] = None, 
+                                 numeric_features: Optional[List[str]] = None) -> ColumnTransformer:
     """
     Create a scikit-learn preprocessing pipeline.
     
@@ -123,7 +129,7 @@ def create_preprocessing_pipeline(categorical_features: List[str] = None,
     
     return preprocessor
 
-def get_model(model_type: str = 'random_forest', **kwargs) -> Any:
+def get_model(model_type: str = 'random_forest', **kwargs) -> Optional[BaseEstimator]:
     """
     Get a model instance based on the specified type.
     
@@ -152,7 +158,7 @@ def get_model(model_type: str = 'random_forest', **kwargs) -> Any:
     
     return models[model_type]
 
-def get_hyperparameter_grid(model_type: str) -> Dict[str, List[Any]]:
+def get_hyperparameter_grid(model_type: str) -> Dict[str, List[Union[str, int, float, None]]]:
     """
     Get default hyperparameter grid for different model types.
     
@@ -198,13 +204,13 @@ def get_hyperparameter_grid(model_type: str) -> Dict[str, List[Any]]:
     
     if model_type not in param_grids:
         logger.warning(f"No default hyperparameter grid for model type: {model_type}")
-        return {}
+        return cast(Dict[str, List[Union[str, int, float, None]]], {})
     
-    return param_grids[model_type]
+    return cast(Dict[str, List[Union[str, int, float, None]]], param_grids[model_type])
 
 def train_model(X_train: pd.DataFrame, y_train: pd.Series, 
               model_type: str = 'random_forest',
-              params: Dict[str, Any] = None) -> Any:
+              params: Optional[Dict[str, Any]] = None) -> Any:
     """
     Train a machine learning model with the provided data.
     
@@ -238,7 +244,7 @@ def train_model(X_train: pd.DataFrame, y_train: pd.Series,
 
 def tune_hyperparameters(X_train: pd.DataFrame, y_train: pd.Series,
                       model_type: str = 'random_forest',
-                      param_grid: Dict[str, List[Any]] = None,
+                      param_grid: Optional[Dict[str, List[Union[str, int, float, None]]]] = None,
                       cv: int = 5,
                       n_jobs: int = -1,
                       method: str = 'grid',
@@ -407,4 +413,89 @@ def cross_validate_model(model: Any, X: pd.DataFrame, y: pd.Series,
         logger.error(f"Error during cross-validation: {e}")
         return {'error': str(e)}
 
+
+class FPLPointsPredictor:
+    """
+    Class for loading a trained model and making points predictions for FPL players.
+    """
+    
+    def __init__(self):
+        """
+        Initialize the FPL points predictor.
+        """
+        self.model = None
+        self.feature_names = None
+        self.logger = logging.getLogger(__name__)
+
+    def load(self, model_file: Union[str, Path, PathLike]) -> bool:
+        """
+        Load a trained model from a file.
+        
+        Args:
+            model_file: Path to the saved model file (can be a string path or Path object)
+            
+        Returns:
+            True if the model was successfully loaded, False otherwise
+        """
+        try:
+            if not os.path.exists(model_file):
+                self.logger.error(f"Model file not found: {model_file}")
+                return False
+            
+            with open(str(model_file), 'rb') as f:
+                model_data = pickle.load(f)
+                
+            # Extract model and feature names
+            if isinstance(model_data, dict):
+                self.model = model_data.get('model')
+                self.feature_names = model_data.get('feature_names')
+            else:
+                # Assume the file contains just the model
+                self.model = model_data
+                self.feature_names = None
+                
+            self.logger.info(f"Model loaded successfully from {model_file}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error loading model from {model_file}: {e}")
+            return False
+    
+    def predict(self, player_data: Union[pd.DataFrame, Dict[str, Any]]) -> Optional[float]:
+        """
+        Predict the expected points for a player based on the loaded model.
+        
+        Args:
+            player_data: Player features either as a DataFrame row or dictionary
+            
+        Returns:
+            Predicted points or None if prediction failed
+        """
+        if self.model is None:
+            self.logger.error("No model loaded. Call load() first.")
+            return None
+        
+        try:
+            # Convert dict to DataFrame if necessary
+            if isinstance(player_data, dict):
+                player_data = pd.DataFrame([player_data])
+            
+            # Filter features if we know what features the model needs
+            if self.feature_names is not None:
+                missing_features = [f for f in self.feature_names if f not in player_data.columns]
+                if missing_features:
+                    self.logger.error(f"Missing required features: {missing_features}")
+                    return None
+                
+                player_data = player_data[self.feature_names]
+            
+            # Make prediction
+            prediction = self.model.predict(player_data)
+            
+            # Return the first prediction (assuming single player input)
+            return float(prediction[0]) if len(prediction) > 0 else None
+            
+        except Exception as e:
+            self.logger.error(f"Error making prediction: {e}")
+            return None
 

@@ -4,12 +4,11 @@ budget constraints, and optimal team structure.
 """
 
 import logging
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Tuple, Any, Optional, Union, TypeVar
-from pathlib import Path
 import pickle
-import datetime
+from typing import Any, Dict, List, Optional, TypeVar
+
+import numpy as np
+import pandas as pd
 
 T = TypeVar('T')
 
@@ -530,11 +529,6 @@ class TransferRecommender:
             # In a real implementation, this would need to respect team constraints (max 3 per team)
             # and budget constraints
             
-            # Get the current total budget
-            if 'now_cost' in current_team.columns:
-                total_budget = current_team['now_cost'].sum() / 10
-            else:
-                total_budget = 100.0  # Default FPL budget
                 
             # Simple team selection - just to demonstrate
             optimal_team = []
@@ -616,11 +610,6 @@ class TransferRecommender:
                     
             current_total_points = current_team['predicted_points'].sum() / 5  # Divide by 5 to get single GW estimate
             
-            # Get the current total budget
-            if 'now_cost' in current_team.columns:
-                total_budget = current_team['now_cost'].sum() / 10
-            else:
-                total_budget = 100.0  # Default FPL budget
                 
             # Select optimal team for free hit
             freehit_team = []

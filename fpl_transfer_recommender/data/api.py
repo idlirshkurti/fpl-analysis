@@ -5,7 +5,7 @@ Uses the amosbastian/fpl package to fetch player data, teams, and fixtures.
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List
 
 import aiohttp
 from fpl import FPL

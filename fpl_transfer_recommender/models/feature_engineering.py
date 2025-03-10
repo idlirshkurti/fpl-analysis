@@ -4,9 +4,9 @@ Transforms preprocessed FPL data into features suitable for machine learning mod
 """
 
 import logging
-import pandas as pd
+
 import numpy as np
-from typing import Dict, List, Optional, Union, Tuple
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -85,14 +85,14 @@ def create_fixture_difficulty_features(player_df: pd.DataFrame,
         team_id_to_strength = team_df.set_index('id')['strength'].to_dict() if 'strength' in team_df.columns else {}
         
         # Filter for future fixtures
-        future_fixtures = fixture_df[fixture_df['finished'] == False].copy() if 'finished' in fixture_df.columns else pd.DataFrame()
+        future_fixtures = fixture_df[~fixture_df['finished']].copy() if 'finished' in fixture_df.columns else pd.DataFrame()
         
         if not future_fixtures.empty and 'event' in future_fixtures.columns:
             # Sort by gameweek
             future_fixtures = future_fixtures.sort_values('event')
             
             # Group fixtures by team
-            team_fixtures = {}
+            team_fixtures: dict[int, list[tuple[int, int, str]]] = {}
             for _, fixture in future_fixtures.iterrows():
                 gw = fixture['event']
                 
@@ -180,7 +180,7 @@ def create_team_strength_features(player_df: pd.DataFrame, team_df: pd.DataFrame
         
         # Add team attributes to player dataframe
         for attr_name, attr_dict in team_attributes.items():
-            df[attr_name] = df['team'].map(lambda t: attr_dict.get(t, 0))
+            df[attr_name] = df['team'].map(lambda t, attr_dict=attr_dict: attr_dict.get(t, 0))
         
         # Create composite features
         if all(col in df.columns for col in ['strength_attack_home', 'strength_attack_away']):
@@ -334,7 +334,7 @@ def calculate_expected_points(player_features: pd.DataFrame,
             return df
         
         # Filter future fixtures
-        future_fixtures = fixture_df[fixture_df['finished'] == False].copy() if 'finished' in fixture_df.columns else pd.DataFrame()
+        future_fixtures = fixture_df[~fixture_df['finished']].copy() if 'finished' in fixture_df.columns else pd.DataFrame()
         
         if future_fixtures.empty:
             logger.warning("No future fixtures available for expected points calculation")
@@ -351,7 +351,7 @@ def calculate_expected_points(player_features: pd.DataFrame,
         df['xP_next_n'] = 0.0
         
         # Create fixture lookup for each team and gameweek
-        fixture_lookup = {}
+        fixture_lookup: dict[int, dict[int, list[dict[str, int | bool]]]] = {}
         for _, fixture in future_fixtures.iterrows():
             gw = fixture['event']
             if gw not in gameweeks:
