@@ -1,0 +1,30 @@
+# Ruff configuration for FPL Transfer Recommender
+
+# Enable pycodestyle (E), Pyflakes (F), isort (I), and flake8-bugbear (B) rules
+select = ["E", "F", "I", "B"]
+
+# Ignore line length violations
+ignore = ["E501"]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided
+fixable = ["ALL"]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "__pypackages__",
+    "dist",
+    "venv",
+    "env",
+]
+
+# Maximum line length
+line-length = 100
+
+# Target Python version
+target-version = "py310"
+
